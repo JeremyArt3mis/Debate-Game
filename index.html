@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coyote vs Road Runner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .char-img {
+      transform-origin: bottom center;
+      transition: filter 0.2s ease;
+      will-change: transform;
+    }
+    .char-img:hover {
+      filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.65));
+    }
+  </style>
+</head>
+<body id="bgCanvas" class="w-screen h-screen relative flex items-end justify-between">
+
+  <!-- ============================================================= -->
+  <!-- LEFT: WILE E. COYOTE -->
+  <!-- ============================================================= -->
+  <div class="w-1/2 h-full flex items-end justify-center pb-6 md:pb-12 z-10 pointer-events-auto" onclick="vote('A', event)">
+    <img 
+      id="coyoteImg"
+      referrerpolicy="no-referrer"
+      src="Coyote.webp" 
+      alt="Wile E. Coyote"
+      class="char-img max-h-[85vh] max-w-[85%] object-contain select-none pointer-events-none drop-shadow-xl"
+    />
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- RIGHT: ROAD RUNNER -->
+  <!-- ============================================================= -->
+  <div class="w-1/2 h-full flex items-end justify-center pb-6 md:pb-12 z-10 pointer-events-auto" onclick="vote('B', event)">
+    <img 
+      id="runnerImg"
+      referrerpolicy="no-referrer"
+      src="Road-runner.webp" 
+      alt="Road Runner"
+      class="char-img max-h-[50vh] max-w-[50%] object-contain select-none pointer-events-none drop-shadow-xl"
+    />
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- CARTOON PHYSICS ENGINE: FLAT SPLIT + SQUASH & STRETCH -->
+  <!-- ============================================================= -->
+  <script>
+    /* Safe Image Fallbacks if primary host is blocked */
+    const coyoteImg = document.getElementById('coyoteImg');
+    const runnerImg = document.getElementById('runnerImg');
+
+    coyoteImg.onerror = function() {
+      this.onerror = null;
+      this.src = "https://static.wikia.nocookie.net/looneytunes/images/7/7f/Wile_E._Coyote.png";
+    };
+
+    runnerImg.onerror = function() {
+      this.onerror = null;
+      this.src = "https://static.wikia.nocookie.net/looneytunes/images/e/ee/Roadrunner_looney_tunes.png";
+    };
+
+    /* Web Audio API for classic cartoon boing sounds */
+    let audioCtx = null;
+    function playBoing(freq, pitchDrop = false) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (pitchDrop) {
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.4, audioCtx.currentTime + 0.2);
+        } else {
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.6, audioCtx.currentTime + 0.2);
+        }
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.22);
+      } catch(e) {}
+    }
+
+    /* Vote Counts */
+    let votesA = 0;
+    let votesB = 0;
+
+    /* Background Split Physics */
+    let targetX = 50;  // 50% default center
+    let currentX = 50;
+
+    /* Interactive Click Bounce Impulses */
+    let impulseA = 0;
+    let impulseB = 0;
+
+    const bgCanvas = document.getElementById('bgCanvas');
+
+    /* Light Flat Colors */
+    const BROWN = "#c88554"; // Light Warm Desert Caramel
+    const BLUE  = "#5ebbf8"; // Light Vibrant Sky Blue
+
+    /* MAIN ANIMATION LOOP */
+    function render(timestamp) {
+      // 1. Ease the flat split line: (targetX - currentX) / 15
+      currentX += (targetX - currentX) / 15;
+
+      // 2. High-speed vibration dialed down to max ~0.5
+      const wobble = Math.sin(timestamp * 0.035) * 0.35 + Math.sin(timestamp * 0.08) * 0.15;
+      const splitPosition = currentX + wobble;
+
+      // 3. Completely FLAT background split
+      bgCanvas.style.background = `linear-gradient(to right, 
+        ${BROWN} 0%, 
+        ${BROWN} ${splitPosition}%, 
+        ${BLUE} ${splitPosition}%, 
+        ${BLUE} 100%)`;
+
+      // 4. Calculate Percentage for Squash & Stretch
+      const total = votesA + votesB;
+      const pctA = total > 0 ? (votesA / total) : 0.5;
+      const pctB = 1.0 - pctA;
+
+      // Dampen click impulses
+      impulseA *= 0.85;
+      impulseB *= 0.85;
+
+      // 5. SQUASH AND STRETCH FORMULA
+      const stretchA_Y = 0.65 + (pctA * 0.7) + (impulseA * 0.35);
+      const squashA_X  = (1 / Math.sqrt(Math.max(0.2, stretchA_Y))) - (impulseA * 0.2);
+
+      const stretchB_Y = 0.65 + (pctB * 0.7) + (impulseB * 0.35);
+      const squashB_X  = (1 / Math.sqrt(Math.max(0.2, stretchB_Y))) - (impulseB * 0.2);
+
+      // Subtle idle breathing
+      const breathA = Math.sin(timestamp * 0.005) * 0.02;
+      const breathB = Math.cos(timestamp * 0.006) * 0.02;
+
+      coyoteImg.style.transform = `scale(${squashA_X + breathA}, ${stretchA_Y - breathA})`;
+      runnerImg.style.transform = `scale(${squashB_X + breathB}, ${stretchB_Y - breathB})`;
+
+      requestAnimationFrame(render);
+    }
+
+    /* Vote Handlers */
+    function vote(side, e) {
+      if (e) e.stopPropagation();
+
+      if (side === 'A') {
+        votesA++;
+        impulseA = 0.6;
+        playBoing(260, false);
+      } else {
+        votesB++;
+        impulseB = 0.6;
+        playBoing(440, false);
+      }
+
+      const total = votesA + votesB;
+      targetX = (votesA / total) * 100;
+    }
+
+    /* Reset / Keyboard Shortcuts */
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+        vote('A');
+      } else if (e.key === 'b' || e.key === 'B' || e.key === 'ArrowRight') {
+        vote('B');
+      } else if (e.key === 'r' || e.key === 'R') {
+        votesA = 0;
+        votesB = 0;
+        targetX = 50;
+        playBoing(350, true);
+      }
+    });
+
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
